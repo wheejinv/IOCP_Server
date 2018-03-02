@@ -13,7 +13,7 @@
 #define MAX_CLNT 256
 
 HANDLE hMutex;
-int clntCnt;
+int    clntCnt;
 SOCKET clntSocks[MAX_CLNT];
 
 
@@ -21,172 +21,183 @@ using namespace std;
 
 typedef struct // socket info
 {
-	SOCKET hClntSock;
-	SOCKADDR clntAdr;
+  SOCKET   hClntSock;
+  SOCKADDR clntAdr;
 } PER_HANDLE_DATA, *LPPER_HANDLE_DATA;
 
 typedef struct // buffer info
 {
-	OVERLAPPED overlapped;
-	WSABUF wsaBuf;
-	char buffer[BUF_SIZE];
-	int rwMode; // READ or WRITE
+  OVERLAPPED overlapped;
+  WSABUF     wsaBuf;
+  char       buffer[BUF_SIZE];
+  int        rwMode; // READ or WRITE
 } PER_IO_DATA, *LPPER_IO_DATA;
 
-void CompressSocketArray(SOCKET sock);
+void            CompressSocketArray(SOCKET sock);
 unsigned WINAPI ChatThread(LPVOID CompletionPortIO);
-void ErrorHandling(char *message);
+void            ErrorHandling(char *message);
 
-int main(int argc, char *argv[])
+int             main(int argc, char *argv[])
 {
-	WSADATA wsaData;
-	HANDLE  hComPort;
-	SYSTEM_INFO   sysInfo;
-	LPPER_IO_DATA ioInfo;
-	LPPER_HANDLE_DATA handleInfo;
+  WSADATA wsaData;
+  HANDLE  hComPort;
+  SYSTEM_INFO   sysInfo;
+  LPPER_IO_DATA ioInfo;
+  LPPER_HANDLE_DATA handleInfo;
 
-	SOCKET hServSock;
-	SOCKADDR_IN servAdr;
-	DWORD recvBytes, flags = 0;
-	int i;
+  SOCKET hServSock;
+  SOCKADDR_IN servAdr;
+  DWORD recvBytes, flags = 0;
+  int   i;
 
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-		ErrorHandling("WSAStartup() error!");
-	}
+  if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    ErrorHandling("WSAStartup() error!");
+  }
 
-	hMutex = CreateMutex(NULL, FALSE, NULL);
+  hMutex = CreateMutex(NULL, FALSE, NULL);
 
-	hComPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+  hComPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 
-	GetSystemInfo(&sysInfo);
-	for (i = 0; i < sysInfo.dwNumberOfProcessors; i++) {
-		_beginthreadex(NULL, 0, ChatThread, (LPVOID)hComPort, 0, NULL);
-	}
+  GetSystemInfo(&sysInfo);
 
-	hServSock = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-	memset(&servAdr, 0, sizeof(servAdr));
-	servAdr.sin_family = AF_INET;
-	servAdr.sin_addr.s_addr = htonl(INADDR_ANY);
-	servAdr.sin_port = htons(atoi(argv[1]));
+  for (i = 0; i < sysInfo.dwNumberOfProcessors; i++) {
+    _beginthreadex(NULL, 0, ChatThread, (LPVOID)hComPort, 0, NULL);
+  }
 
-	bind(hServSock, (SOCKADDR *)&servAdr, sizeof(servAdr));
-	listen(hServSock, 5);
+  hServSock = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+  memset(&servAdr, 0, sizeof(servAdr));
+  servAdr.sin_family      = AF_INET;
+  servAdr.sin_addr.s_addr = htonl(INADDR_ANY);
+  servAdr.sin_port        = htons(atoi(argv[1]));
 
-	while (1)
-	{
-		SOCKET hClntSock;
-		SOCKADDR_IN clntAdr;
-		int addrLen = sizeof(clntAdr);
+  bind(hServSock, (SOCKADDR *)&servAdr, sizeof(servAdr));
+  listen(hServSock, 5);
 
-		hClntSock = accept(hServSock, (SOCKADDR *)&clntAdr, &addrLen);
+  while (1)
+  {
+    SOCKET hClntSock;
+    SOCKADDR_IN clntAdr;
+    int addrLen = sizeof(clntAdr);
 
-		WaitForSingleObject(hMutex, INFINITE);
-		clntSocks[clntCnt++] = hClntSock;
-		ReleaseMutex(hMutex);
+    hClntSock = accept(hServSock, (SOCKADDR *)&clntAdr, &addrLen);
 
-		handleInfo = (LPPER_HANDLE_DATA)malloc(sizeof(PER_HANDLE_DATA));
-		memset(handleInfo, 0, sizeof(PER_HANDLE_DATA));
-		handleInfo->hClntSock = hClntSock;
-		memcpy(&(handleInfo->clntAdr), &clntAdr, addrLen);
+    WaitForSingleObject(hMutex, INFINITE);
+    clntSocks[clntCnt++] = hClntSock;
+    ReleaseMutex(hMutex);
 
-		CreateIoCompletionPort((HANDLE)hClntSock, hComPort, (ULONG_PTR)handleInfo, 0);
+    handleInfo = (LPPER_HANDLE_DATA)malloc(sizeof(PER_HANDLE_DATA));
+    memset(handleInfo, 0, sizeof(PER_HANDLE_DATA));
+    handleInfo->hClntSock = hClntSock;
+    memcpy(&(handleInfo->clntAdr), &clntAdr, addrLen);
 
-		ioInfo = (LPPER_IO_DATA)malloc(sizeof(PER_IO_DATA));
-		memset(ioInfo, 0, sizeof(PER_IO_DATA));
-		ioInfo->wsaBuf.len = BUF_SIZE;
-		ioInfo->wsaBuf.buf = ioInfo->buffer;
-		
-		ioInfo->rwMode = READ;
+    CreateIoCompletionPort((HANDLE)hClntSock, hComPort, (ULONG_PTR)handleInfo, 0);
 
-		WSARecv(handleInfo->hClntSock, &(ioInfo->wsaBuf), 1, &recvBytes, &flags,
-			&(ioInfo->overlapped), NULL);
-	}
+    ioInfo = (LPPER_IO_DATA)malloc(sizeof(PER_IO_DATA));
+    memset(ioInfo, 0, sizeof(PER_IO_DATA));
+    ioInfo->wsaBuf.len = BUF_SIZE;
+    ioInfo->wsaBuf.buf = ioInfo->buffer;
 
-	return 0;
+    ioInfo->rwMode = READ;
+
+    WSARecv(handleInfo->hClntSock, &(ioInfo->wsaBuf), 1, &recvBytes, &flags,
+            &(ioInfo->overlapped), NULL);
+  }
+
+  return 0;
 }
 
 unsigned WINAPI ChatThread(LPVOID pComPort)
 {
-	HANDLE hComPort = (HANDLE)pComPort;
-	SOCKET sock;
-	DWORD bytesTrans;
-	LPPER_HANDLE_DATA handleInfo;
-	LPPER_IO_DATA ioInfo;
-	DWORD flags = 0;
+  HANDLE hComPort = (HANDLE)pComPort;
+  SOCKET sock;
+  DWORD  bytesTrans;
+  LPPER_HANDLE_DATA handleInfo;
+  LPPER_IO_DATA     ioInfo;
+  DWORD flags = 0;
 
-	int i;
+  int i;
 
-	LPPER_IO_DATA sendIoData;
+  LPPER_IO_DATA sendIoData;
 
-	while (1)
-	{
-		GetQueuedCompletionStatus(hComPort, &bytesTrans, (PULONG_PTR)&handleInfo, (LPOVERLAPPED*)&ioInfo, INFINITE);
+  while (1)
+  {
+    GetQueuedCompletionStatus(hComPort, &bytesTrans, (PULONG_PTR)&handleInfo,
+                              (LPOVERLAPPED *)&ioInfo, INFINITE);
 
-		sock = handleInfo->hClntSock;
+    sock = handleInfo->hClntSock;
 
-		if (ioInfo->rwMode == READ) {
-			puts("message received!");
+    if (ioInfo->rwMode == READ) {
+      puts("message received!");
 
-			if (bytesTrans == 0) {
-				CompressSocketArray(sock);
-				closesocket(sock);
-				free(handleInfo);
-				free(ioInfo);
-				continue;
-			}
+      if (bytesTrans == 0) {
+        CompressSocketArray(sock);
+        closesocket(sock);
+        free(handleInfo);
+        free(ioInfo);
+        continue;
+      }
 
-			WaitForSingleObject(hMutex, INFINITE);
-			for (i = 0; i < clntCnt; i++) {
-				sendIoData = (LPPER_IO_DATA)malloc(sizeof(PER_IO_DATA));
-				memset(sendIoData, 0, sizeof(PER_IO_DATA));
-				sendIoData->wsaBuf.len = BUF_SIZE;
-				sendIoData->wsaBuf.buf = sendIoData->buffer;
+      WaitForSingleObject(hMutex, INFINITE);
 
-				sendIoData->rwMode = WRITE;
+      for (i = 0; i < clntCnt; i++) {
+        sendIoData = (LPPER_IO_DATA)malloc(sizeof(PER_IO_DATA));
+        memset(sendIoData, 0, sizeof(PER_IO_DATA));
+        sendIoData->wsaBuf.len = BUF_SIZE;
+        sendIoData->wsaBuf.buf = sendIoData->buffer;
 
-				strcpy_s(sendIoData->buffer, ioInfo->buffer);
+        sendIoData->rwMode = WRITE;
 
-				WSASend(clntSocks[i], &(sendIoData->wsaBuf), 1, NULL, 0, &(sendIoData->overlapped), NULL);
-			}
-			ReleaseMutex(hMutex);
-			
+        strcpy_s(sendIoData->buffer, ioInfo->buffer);
 
-			free(ioInfo);
+        WSASend(clntSocks[i], &(sendIoData->wsaBuf), 1, NULL, 0,
+                &(sendIoData->overlapped), NULL);
+      }
+      ReleaseMutex(hMutex);
 
-			// ¼ö½Å ÁØºñ
-			ioInfo = (LPPER_IO_DATA)malloc(sizeof(PER_IO_DATA));
-			memset(ioInfo, 0, sizeof(PER_IO_DATA));
-			ioInfo->wsaBuf.len = BUF_SIZE;
-			ioInfo->wsaBuf.buf = ioInfo->buffer;
-			ioInfo->rwMode = READ;
-			WSARecv(sock, &(ioInfo->wsaBuf), 1, NULL, &flags, &(ioInfo->overlapped), NULL);
-		}
-		else {
-			puts("message send!");
-			free(ioInfo);
-		}
-	}
 
-	return 0;
+      free(ioInfo);
+
+      // ï¿½ï¿½ï¿½ï¿½ ï¿½Øºï¿½
+      ioInfo = (LPPER_IO_DATA)malloc(sizeof(PER_IO_DATA));
+      memset(ioInfo, 0, sizeof(PER_IO_DATA));
+      ioInfo->wsaBuf.len = BUF_SIZE;
+      ioInfo->wsaBuf.buf = ioInfo->buffer;
+      ioInfo->rwMode     = READ;
+      WSARecv(sock,
+              &(ioInfo->wsaBuf),
+              1,
+              NULL,
+              &flags,
+              &(ioInfo->overlapped),
+              NULL);
+    }
+    else {
+      puts("message send!");
+      free(ioInfo);
+    }
+  }
+
+  return 0;
 }
 
 void CompressSocketArray(SOCKET sock)
 {
-	int i;
+  int i;
 
-	WaitForSingleObject(hMutex, INFINITE);
-	for (i = 0; i < clntCnt; i++) {
-		if (sock == clntSocks[i]) {
-			while (i++ < clntCnt - 1) clntSocks[i] = clntSocks[i + 1];
-			break;
-		}
-	}
-	clntCnt--;
-	ReleaseMutex(hMutex);
+  WaitForSingleObject(hMutex, INFINITE);
+
+  for (i = 0; i < clntCnt; i++) {
+    if (sock == clntSocks[i]) {
+      while (i++ < clntCnt - 1) clntSocks[i] = clntSocks[i + 1];
+      break;
+    }
+  }
+  clntCnt--;
+  ReleaseMutex(hMutex);
 }
 
 void ErrorHandling(char *message)
 {
-	cout << message << endl;
-	exit(1);
+  cout << message << endl;
+  exit(1);
 }
