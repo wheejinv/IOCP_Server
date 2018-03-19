@@ -1,7 +1,6 @@
-// IocpController.h : IOCP ¸ğµâ Å¬·¡½º ¹× °ü·Ã ±¸Á¶Ã¼
+// IocpController.h : IOCP ëª¨ë“ˆ í´ë˜ìŠ¤ ë° ê´€ë ¨ êµ¬ì¡°ì²´
 #pragma once
-
-
+#include "Struct.h"
 
 class NetworkController;
 
@@ -14,8 +13,12 @@ public:
 	void CreateIocpHandle();
 	void CreateThreadPool(NetworkController* const networkController);
 	void Associate(const HANDLE deviceHandle, const ULONG_PTR completionKey);
+	void TerminateThreads();
 
 private:
+
+	static void __stdcall IocpThreadMain(IocpThreadParam* const params);
+
 	HANDLE mIocpHandle;
 	HANDLE* mThreadList;
 	int mNumThread;

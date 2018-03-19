@@ -3,6 +3,7 @@
 #include "Enum.h"
 
 class NetworkController;
+class IocpController;
 
 typedef struct {
 	OVERLAPPED overlapped;
@@ -15,9 +16,13 @@ typedef struct {
 	IoContextPointer SendContext;
 } SocketContext, *SocketContextPointer;
 
-
 typedef struct {
 	SOCKET ListenSocket;
 	NetworkController* NetworkController;
 	IocpController* IocpController;
 } AcceptThreadParam;
+
+typedef struct {
+	NetworkController* NetworkController;
+	HANDLE IocpHandle;
+} IocpThreadParam;

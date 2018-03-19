@@ -2,9 +2,19 @@
 #include "NetworkController.h"
 #include "Logger.h"
 
+NetworkController::NetworkController()
+{
+	hMutex = CreateMutex(NULL, FALSE, NULL);
+}
+NetworkController::~NetworkController()
+{
+	CloseHandle(hMutex);
+}
+
 void NetworkController::InitIocpController()
 {
-
+	mIocpController.CreateIocpHandle();
+	mIocpController.CreateThreadPool(this);
 }
 
 void NetworkController::InitWinSock()
@@ -79,7 +89,100 @@ void NetworkController::WaitForAccept()
 
 void NetworkController::CloseServer()
 {
-	cout << "s" << endl;
+	assert(mListenSocket != INVALID_SOCKET && "mListenSocket is INVALID_SOCKET.");
+
+	mIocpController.TerminateThreads();
+	DeleteAllClientContext();
+	closesocket(mListenSocket);
+	CloseHandle(mAcceptThread);
+	WSACleanup();
+
+	PrintLog(eLogLevel::Info, "NetworkController::CloseServer()");
+}
+
+void NetworkController::PostReceive(const SocketContextPointer clientContext)
+{
+	assert(clientContext != NULL && "clientContext is NULL.");
+
+	DWORD sizeReceived = 0;
+	DWORD flags = 0;
+
+	ZeroMemory(&(clientContext->ReceiveContext->overlapped), sizeof(clientContext->ReceiveContext->overlapped));
+	ZeroMemory(clientContext->ReceiveContext->wsaBuf.buf, SOCKET_BUF_SIZE);
+
+	int resultCode = WSARecv(clientContext->Socket, &(clientContext->ReceiveContext->wsaBuf), 1,
+		&sizeReceived, &flags, &(clientContext->ReceiveContext->overlapped), NULL);
+
+	if (resultCode == SOCKET_ERROR) {
+		int errorCode = WSAGetLastError();
+		if (errorCode != WSA_IO_PENDING) {
+			PrintLog(eLogLevel::Error, "WSARecv() - client(%d), Error code(%d)", clientContext->Socket, errorCode);
+		}
+	}
+}
+void NetworkController::ProceedReceive(const SocketContextPointer clientContext, const DWORD receiveBytes)
+{
+	assert(clientContext != NULL && "clientContext is NULL.");
+
+	PrintLog(eLogLevel::Info, "packet received from client(%d) / thread id : %d / msg : %s",
+		clientContext->Socket, GetCurrentThreadId(), clientContext->ReceiveContext->wsaBuf.buf);
+
+	// 에코 버전
+	//PostSend(clientContext, clientContext->ReceiveContext->wsaBuf.buf);
+
+	// 모든 클라이언트에게 동작하도록 작업.
+	SendAllClient(clientContext->ReceiveContext->wsaBuf.buf);
+}
+void NetworkController::PostSend(const SocketContextPointer clientContext, const char* msg)
+{
+	assert(clientContext != NULL && "clientContext is NULL");
+
+	DWORD byteSent = 0;
+
+	ZeroMemory(&(clientContext->SendContext->overlapped), sizeof(clientContext->SendContext->overlapped));
+	ZeroMemory(clientContext->SendContext->wsaBuf.buf, SOCKET_BUF_SIZE);
+	CopyMemory(clientContext->SendContext->wsaBuf.buf, msg, strlen(msg) + 1);
+	clientContext->SendContext->wsaBuf.len = (ULONG)(strlen(msg) + 1);
+
+	int resultCode = WSASend(clientContext->Socket, &(clientContext->SendContext->wsaBuf), 1,
+		&byteSent, 0, &(clientContext->SendContext->overlapped), NULL);
+
+	if (resultCode == SOCKET_ERROR)
+	{
+		int errorCode = WSAGetLastError();
+		if (errorCode != WSA_IO_PENDING)
+		{
+			PrintLog(eLogLevel::Error, "WSASend() - %d", errorCode);
+		}
+	}
+}
+void NetworkController::ProceesSend(const SocketContextPointer clientContext)
+{
+	assert(clientContext != NULL && "clientContext is NULL.");
+
+	PrintLog(eLogLevel::Info, "packet sent to client(%d) / thread id : %d / msg : %s",
+		clientContext->Socket, GetCurrentThreadId(), clientContext->SendContext->wsaBuf.buf);
+
+	PostReceive(clientContext);
+}
+
+void NetworkController::SendAllClient(const char* msg)
+{
+
+	WaitForSingleObject(hMutex, INFINITE);
+
+	set<SocketContextPointer>::iterator socketIter = mSetSocketContext.begin();
+	const set<SocketContextPointer>::iterator endIter = mSetSocketContext.end();
+
+	while (socketIter != endIter) {
+		SocketContextPointer clientContext = *socketIter;
+
+		PostSend(clientContext, msg);
+
+		socketIter++;
+	}
+
+	ReleaseMutex(hMutex);
 }
 
 SocketContextPointer NetworkController::CreateSocketContext(const SOCKET clientSocket)
@@ -104,6 +207,23 @@ SocketContextPointer NetworkController::CreateSocketContext(const SOCKET clientS
 	ZeroMemory(contextPotiner->SendContext->wsaBuf.buf, sizeof(char) * SOCKET_BUF_SIZE);
 
 	return contextPotiner;
+}
+
+void NetworkController::DeleteSocketContext(const SocketContextPointer contextPointer)
+{
+
+	assert(contextPointer != NULL && "contextPointer is NULL.");
+	assert(contextPointer->Socket != INVALID_SOCKET && "contextPointer->Socket is INVALID_SOCKET");
+	assert(contextPointer->ReceiveContext != NULL && "contextPointer->ReceiveContext is NULL.");
+	assert(contextPointer->SendContext != NULL && "contextPointer->SendContext is NULL.");
+
+	closesocket(contextPointer->Socket);
+
+	delete contextPointer->ReceiveContext->wsaBuf.buf;
+	delete contextPointer->ReceiveContext;
+	delete contextPointer->SendContext->wsaBuf.buf;
+	delete contextPointer->SendContext;
+	delete contextPointer;
 }
 
 
@@ -158,16 +278,39 @@ void __stdcall NetworkController::StartThread(AcceptThreadParam* const params)
 void NetworkController::AddClientContextToSet(const SocketContextPointer clientContext)
 {
 	assert(clientContext != NULL && "clientContext is NULL.");
+
+	WaitForSingleObject(hMutex, INFINITE);
+
 	mSetSocketContext.insert(clientContext);
 
+	ReleaseMutex(hMutex);
 }
 
 void NetworkController::DeleteClientContextInSet(const SocketContextPointer key)
 {
+	assert(key != NULL && "key is NULL.");
 
+	WaitForSingleObject(hMutex, INFINITE);
+
+	mSetSocketContext.erase(key);
+
+	ReleaseMutex(hMutex);
 }
 
 void NetworkController::DeleteAllClientContext()
 {
+	set<SocketContextPointer>::iterator socketIter = mSetSocketContext.begin();
+	const set<SocketContextPointer>::iterator endIter = mSetSocketContext.end();
 
+	WaitForSingleObject(hMutex, INFINITE);
+
+	while (socketIter != endIter) {
+		SocketContextPointer clientContext = *socketIter;
+		DeleteSocketContext(clientContext);
+		socketIter++;
+	}
+
+	mSetSocketContext.clear();
+
+	ReleaseMutex(hMutex);
 }

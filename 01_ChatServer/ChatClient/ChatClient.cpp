@@ -19,7 +19,7 @@ char msg[BUF_SIZE];
 
 int main(int argc, char *argv[])
 {
-  // WSADATA wsaData;
+  WSADATA wsaData;
   SOCKET hSock;
   SOCKADDR_IN servAdr;
   HANDLE hSndThread, hRcvThread;
