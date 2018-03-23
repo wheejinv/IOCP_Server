@@ -1,4 +1,4 @@
-// IocpController.h : IOCP 모듈 클래스 및 관련 구조체
+﻿// IocpController.h : IOCP 모듈 클래스 및 관련 구조체
 #pragma once
 #include "Struct.h"
 

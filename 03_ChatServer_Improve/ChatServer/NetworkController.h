@@ -28,12 +28,14 @@ public:
 	void ProceesSend(const SocketContextPointer clientContext);
 	void SendAllClient(const char* msg);
 
+	void OnDisconnectSocket(const SocketContextPointer clientContext);
+
 	SocketContextPointer CreateSocketContext(const SOCKET clientSocket);
 	void DeleteSocketContext(const SocketContextPointer contextPointer);
 
 	// client context map
 	void AddClientContextToSet(const SocketContextPointer clientContext);
-	void DeleteClientContextInSet(const SocketContextPointer key);
+	int DeleteClientContextInSet(const SocketContextPointer key);
 	void DeleteAllClientContext();
 
 private:

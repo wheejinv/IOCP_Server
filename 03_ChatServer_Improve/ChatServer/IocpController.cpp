@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "IocpController.h"
 #include "Logger.h"
 #include "NetworkController.h"
@@ -101,20 +101,32 @@ void __stdcall IocpController::IocpThreadMain(IocpThreadParam* const params)
 			reinterpret_cast<PULONG_PTR>(&completionKey),
 			reinterpret_cast<LPOVERLAPPED*>(&ioType), INFINITE);
 
-		if (result == FALSE ) {
-			continue;
-		}
-
 		if ((int)completionKey == REQUEST_QUIT_THREAD) {
 			break;
 		}
 
 		SocketContextPointer clientContext = completionKey;
 
+		BOOL isDisConnectSocket = false;
+
+		if (result == FALSE) {
+			int errorCode = WSAGetLastError();
+
+			PrintLog(eLogLevel::Error, "GetQueuedCompletionStatus error -> %d", errorCode);
+
+			if (errorCode == ERROR_NETNAME_DELETED) {
+				// ctrl + c 등으로 클라이언트 종료 시
+				networkController->OnDisconnectSocket(clientContext);
+				isDisConnectSocket = true;
+			}
+			
+			continue;
+		}
+
 		// client 종료 시
-		if (transferredBytes == 0) {
-			networkController->DeleteClientContextInSet(clientContext);
-			networkController->DeleteSocketContext(clientContext);
+		if (transferredBytes == 0 && isDisConnectSocket == false ) {
+			networkController->OnDisconnectSocket(clientContext);
+			isDisConnectSocket = true;
 			continue;
 		}
 

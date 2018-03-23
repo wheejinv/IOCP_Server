@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "NetworkController.h"
 #include "Logger.h"
 
@@ -120,19 +120,26 @@ void NetworkController::PostReceive(const SocketContextPointer clientContext)
 		}
 	}
 }
+
 void NetworkController::ProceedReceive(const SocketContextPointer clientContext, const DWORD receiveBytes)
 {
 	assert(clientContext != NULL && "clientContext is NULL.");
 
-	PrintLog(eLogLevel::Info, "packet received from client(%d) / thread id : %d / msg : %s",
-		clientContext->Socket, GetCurrentThreadId(), clientContext->ReceiveContext->wsaBuf.buf);
+	ChatPacket chatPacket;
+	CopyMemory(&chatPacket, clientContext->ReceiveContext->wsaBuf.buf, sizeof(ChatPacket));
+
+
+	PrintLog(eLogLevel::Info, "packet received from client(%d) / thread id : %d / userName : %s / msg : %s",
+		clientContext->Socket, GetCurrentThreadId(), chatPacket.userName, chatPacket.chatMsg );
 
 	// 에코 버전
 	//PostSend(clientContext, clientContext->ReceiveContext->wsaBuf.buf);
 
 	// 모든 클라이언트에게 동작하도록 작업.
-	SendAllClient(clientContext->ReceiveContext->wsaBuf.buf);
+
+	SendAllClient((const char* )&chatPacket);
 }
+
 void NetworkController::PostSend(const SocketContextPointer clientContext, const char* msg)
 {
 	assert(clientContext != NULL && "clientContext is NULL");
@@ -141,8 +148,8 @@ void NetworkController::PostSend(const SocketContextPointer clientContext, const
 
 	ZeroMemory(&(clientContext->SendContext->overlapped), sizeof(clientContext->SendContext->overlapped));
 	ZeroMemory(clientContext->SendContext->wsaBuf.buf, SOCKET_BUF_SIZE);
-	CopyMemory(clientContext->SendContext->wsaBuf.buf, msg, strlen(msg) + 1);
-	clientContext->SendContext->wsaBuf.len = (ULONG)(strlen(msg) + 1);
+	CopyMemory(clientContext->SendContext->wsaBuf.buf, msg, SOCKET_BUF_SIZE);
+	clientContext->SendContext->wsaBuf.len = (ULONG)(SOCKET_BUF_SIZE);
 
 	int resultCode = WSASend(clientContext->Socket, &(clientContext->SendContext->wsaBuf), 1,
 		&byteSent, 0, &(clientContext->SendContext->overlapped), NULL);
@@ -156,12 +163,18 @@ void NetworkController::PostSend(const SocketContextPointer clientContext, const
 		}
 	}
 }
+
 void NetworkController::ProceesSend(const SocketContextPointer clientContext)
 {
 	assert(clientContext != NULL && "clientContext is NULL.");
 
-	PrintLog(eLogLevel::Info, "packet sent to client(%d) / thread id : %d / msg : %s",
-		clientContext->Socket, GetCurrentThreadId(), clientContext->SendContext->wsaBuf.buf);
+	ChatPacketPointer chatPacketPointer = (ChatPacketPointer)clientContext->SendContext->wsaBuf.buf;
+	int userID = chatPacketPointer->userID;
+	char* userName = chatPacketPointer->userName;
+	char* msg = chatPacketPointer->chatMsg;
+
+	PrintLog(eLogLevel::Info, "packet sent to client(%d) / thread id : %d / userName : %s / msg : %s",
+		clientContext->Socket, GetCurrentThreadId(), userName, msg);
 
 	PostReceive(clientContext);
 }
@@ -183,6 +196,26 @@ void NetworkController::SendAllClient(const char* msg)
 	}
 
 	ReleaseMutex(hMutex);
+}
+
+void NetworkController::OnDisconnectSocket(const SocketContextPointer clientContext)
+{
+
+	int removeNum = DeleteClientContextInSet(clientContext);
+
+	if (removeNum == 0) {
+		return;
+	}
+
+	ChatPacketPointer chatPacketPointer = (ChatPacketPointer)clientContext->SendContext->wsaBuf.buf;
+
+	ChatPacket tempPacket;
+	CopyMemory(&tempPacket, chatPacketPointer, sizeof(ChatPacket));
+
+	DeleteSocketContext(clientContext);
+
+	sprintf_s(tempPacket.chatMsg, "님이 접속 종료하였습니다.");
+	SendAllClient((const char*)(&tempPacket));
 }
 
 SocketContextPointer NetworkController::CreateSocketContext(const SOCKET clientSocket)
@@ -225,7 +258,6 @@ void NetworkController::DeleteSocketContext(const SocketContextPointer contextPo
 	delete contextPointer->SendContext;
 	delete contextPointer;
 }
-
 
 void __stdcall NetworkController::StartThread(AcceptThreadParam* const params)
 {
@@ -274,7 +306,6 @@ void __stdcall NetworkController::StartThread(AcceptThreadParam* const params)
 
 }
 
-
 void NetworkController::AddClientContextToSet(const SocketContextPointer clientContext)
 {
 	assert(clientContext != NULL && "clientContext is NULL.");
@@ -286,15 +317,19 @@ void NetworkController::AddClientContextToSet(const SocketContextPointer clientC
 	ReleaseMutex(hMutex);
 }
 
-void NetworkController::DeleteClientContextInSet(const SocketContextPointer key)
+int NetworkController::DeleteClientContextInSet(const SocketContextPointer key)
 {
 	assert(key != NULL && "key is NULL.");
 
 	WaitForSingleObject(hMutex, INFINITE);
 
-	mSetSocketContext.erase(key);
+	int removeNum = 0;
+
+	removeNum = mSetSocketContext.erase(key);
 
 	ReleaseMutex(hMutex);
+
+	return removeNum;
 }
 
 void NetworkController::DeleteAllClientContext()

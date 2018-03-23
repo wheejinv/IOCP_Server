@@ -37,12 +37,12 @@ void PrintLog(const eLogLevel level, const char * const str, ...)
 
 	va_end(argList);
 
-	sprintf_s(buf, "%s %s", logStr, strBuf);
+	sprintf_s(buf, "%s %s\n", logStr, strBuf);
 
 	PrintConsole(buf);
 }
 
 void PrintConsole(const char * const str)
 {
-	cout << str << endl;
+	cout << str;
 }
