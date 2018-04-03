@@ -30,4 +30,5 @@ linux 서버에 mysql 설치 후 데이터 베이스 생성, table 생성
 
 ## 05_IOCP server 와 unity 클라이언트 간의 통신.
 
-ing..
+login 화면이 존재하고,
+json 형식으로 통신한다.
