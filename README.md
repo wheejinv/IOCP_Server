@@ -20,5 +20,14 @@
 - 유저들이 나가고 들어와도 관리가 되게끔 만듭니다.
 	-  끊김 이벤트가 오면 다른 유저에게 나갔다고 표시
 
-## 04_MySql login and unity client... ing
-mysql 연동.. 및 클라이언트 로그인
+## 04_MySql Connector
+
+[cpp mysql 셋팅 페이지 링크](./md/04.md)<br>
+
+practice 프로젝트,
+linux 서버에 mysql 설치 후 데이터 베이스 생성, table 생성
+해당 데이터 베이스 권한만 가진 mysql user 생성 및 접속.
+
+## 05_IOCP server 와 unity 클라이언트 간의 통신.
+
+ing..
