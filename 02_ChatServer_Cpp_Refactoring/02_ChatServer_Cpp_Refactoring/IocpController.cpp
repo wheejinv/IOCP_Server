@@ -111,14 +111,14 @@ void __stdcall IocpController::IocpThreadMain(IocpThreadParam* const params)
 
 		SocketContextPointer clientContext = completionKey;
 
-		// client ì¢…ë£Œ ì‹œ
+		// client Á¾·á ½Ã
 		if (transferredBytes == 0) {
 			networkController->DeleteClientContextInSet(clientContext);
 			networkController->DeleteSocketContext(clientContext);
 			continue;
 		}
 
-		// io typeì— ë”°ë¥¸ ì²˜ë¦¬ë™ìž‘ ë¶„ê¸°
+		// io type¿¡ µû¸¥ Ã³¸®µ¿ÀÛ ºÐ±â
 		if (ioType == clientContext->ReceiveContext) {
 			networkController->ProceedReceive(clientContext, transferredBytes);
 		}

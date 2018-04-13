@@ -127,10 +127,10 @@ void NetworkController::ProceedReceive(const SocketContextPointer clientContext,
 	PrintLog(eLogLevel::Info, "packet received from client(%d) / thread id : %d / msg : %s",
 		clientContext->Socket, GetCurrentThreadId(), clientContext->ReceiveContext->wsaBuf.buf);
 
-	// ì—ì½” ë²„ì „
+	// ¿¡ÄÚ ¹öÀü
 	//PostSend(clientContext, clientContext->ReceiveContext->wsaBuf.buf);
 
-	// ëª¨ë“  í´ë¼ì´ì–¸íŠ¸ì—ê²Œ ë™ìž‘í•˜ë„ë¡ ìž‘ì—….
+	// ¸ðµç Å¬¶óÀÌ¾ðÆ®¿¡°Ô µ¿ÀÛÇÏµµ·Ï ÀÛ¾÷.
 	SendAllClient(clientContext->ReceiveContext->wsaBuf.buf);
 }
 void NetworkController::PostSend(const SocketContextPointer clientContext, const char* msg)

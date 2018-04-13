@@ -1,4 +1,4 @@
-// IocpController.h : IOCP ëª¨ë“ˆ í´ëž˜ìŠ¤ ë° ê´€ë ¨ êµ¬ì¡°ì²´
+// IocpController.h : IOCP ¸ðµâ Å¬·¡½º ¹× °ü·Ã ±¸Á¶Ã¼
 #pragma once
 #include "Struct.h"
 
