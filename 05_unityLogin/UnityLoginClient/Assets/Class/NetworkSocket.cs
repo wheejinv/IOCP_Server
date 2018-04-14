@@ -27,7 +27,15 @@ namespace Assets.Class
 
         private NetworkSocket()
         {
-            
+            var data = new JsonDataClass();
+            data.name = "Park";
+            data.level = 10;
+            data.likes = new List<string>()
+            {
+                "dog", "cat"
+            };
+
+            Debug.Log(JsonUtility.ToJson(data, true));
         }
 
         public static NetworkSocket Instance
